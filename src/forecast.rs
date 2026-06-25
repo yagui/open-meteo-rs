@@ -1109,23 +1109,71 @@ mod tests {
     async fn get_forecast_parallel() {
         let clt = client::Client::new();
 
-        let mut opts = Options {
-            location: location::Location {
-                lat: 48.864_716,
-                lng: 2.349_014,
-            },
-            ..Default::default()
+        let mut opts_one = Options::default();
+        let mut opts_two = Options::default();
+        opts_one.location = location::Location {
+            lat: 48.864716,
+            lng: 2.349014,
         };
-
-        opts.hourly.push("temperature_2m".into());
-
-        let opts_two = opts.clone();
-        let fut_one = clt.forecast(opts);
+        opts_two.location = location::Location {
+            lat: 28.864716,
+            lng: 2.349014,
+        };
+        opts_one.current.push("temperature_2m".into());
+        opts_two.current.push("temperature_2m".into());
+        let fut_one = clt.forecast(opts_one);
         let fut_two = clt.forecast(opts_two);
 
         let (res_one, res_two) = join!(fut_one, fut_two);
 
         println!("{:?}", res_one.unwrap());
         println!("{:?}", res_two.unwrap());
+    }
+
+    const DEFAULT_USER_AGENT: &str = "CARGO_PKG_NAME/CARGO_PKG_VERSION";
+    const DEFAULT_TIMEOUT: tokio::time::Duration = tokio::time::Duration::from_millis(1000);
+    const DEFAULT_CONNECT_TIMEOUT: tokio::time::Duration = tokio::time::Duration::from_millis(900);
+
+    #[tokio::test]
+    async fn test_request_error() {
+        let reqwest_client = reqwest::Client::builder()
+            .timeout(DEFAULT_TIMEOUT)
+            .connect_timeout(DEFAULT_CONNECT_TIMEOUT)
+            .user_agent(DEFAULT_USER_AGENT)
+            .build()
+            .unwrap();
+
+        let clt = client::Client::new().with_reqwest_client(reqwest_client);
+        let mut opts_one = Options::default();
+        let mut opts_two = Options::default();
+        opts_one.location = location::Location {
+            lat: 48.864716,
+            lng: 2.349014,
+        };
+        opts_two.location = location::Location {
+            lat: 28.864716,
+            lng: 2.349014,
+        };
+        let loc1 = opts_one.location.clone();
+        let loc2 = opts_two.location.clone();
+        opts_one.current.push("temperature_2m".into());
+        opts_two.current.push("temperature_2m".into());
+        let fut_one = clt.forecast(opts_one);
+        let fut_two = clt.forecast(opts_two);
+
+        let (res_one, res_two) = join!(fut_one, fut_two);
+
+        if let Err(e) = res_one {
+            eprintln!(
+                "Error getting forecast for lat {:.5} lng {:.5}: {}",
+                loc1.lat, loc2.lng, e
+            );
+        }
+        if let Err(e) = res_two {
+            eprintln!(
+                "Error getting forecast for lat {:.5} lng {:.5}: {}",
+                loc2.lat, loc2.lng, e
+            );
+        }
     }
 }
